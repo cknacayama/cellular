@@ -64,18 +64,21 @@ static const LifeRule CUBE_RULE = {
 static struct {
     Life        life;
     glm::mat4x4 projection;
-    LifeRule    life_rule = DEFAULT_RULE;
-    usize       update    = 4;
-    Shader      shader_program;
-    GLuint      VAO;
-    GLuint      position_buffer;
-    GLuint      color_buffer;
+    LifeRule    life_rule     = CLOUD_RULE;
+    usize       update        = 4;
+    usize       update_count  = 0;
+    f64         elapsed_total = 0;
+
+    Shader shader_program;
+    GLuint VAO;
+    GLuint position_buffer;
+    GLuint color_buffer;
 
     GLuint mvp_location;
     GLuint vertex_position;
     GLuint vertex_color;
 
-    bool full_init = false;
+    bool full_init = true;
 } app_state;
 
 static void draw_scene(void) {
@@ -144,7 +147,10 @@ void framebuffer_size(GLFWwindow *window, int width, int height) {
 
 void timer(size_t value) {
     if (value % app_state.update == 0) {
+        f64 start = glfwGetTime();
         app_state.life.update(app_state.life_rule);
+        app_state.elapsed_total += glfwGetTime() - start;
+        app_state.update_count += 1;
     }
 }
 
@@ -185,7 +191,7 @@ void delete_buffers() {
 
 void init(void) {
     srand(42);
-    app_state.life.update_size(16);
+    app_state.life.update_size(100);
     life_init();
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // define a cor de fundo
     glEnable(GL_DEPTH_TEST);
@@ -208,6 +214,7 @@ void init(void) {
 
 void deinit(void) {
     delete_buffers();
+    println("{} ms", (app_state.elapsed_total / app_state.update_count) * 1000);
 }
 
 void scroll(GLFWwindow *window, double xoffset, double yoffset) {

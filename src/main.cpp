@@ -1,4 +1,5 @@
 #include <cell/app.hpp>
+#include <cstddef>
 #include <util/util.hpp>
 
 int main(void) {
@@ -28,11 +29,21 @@ int main(void) {
 
     init();
 
-    usize i = 0;
+    usize i           = 0;
+    usize frame_count = 0;
+    f64   last        = glfwGetTime();
     while (!glfwWindowShouldClose(window)) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         display(window);
+        frame_count += 1;
+        f64 cur = glfwGetTime();
+        if (cur - last >= 1) {
+            f64 fps     = static_cast<f64>(frame_count) / (cur - last);
+            frame_count = 0;
+            last        = cur;
+            println("{} fps", fps);
+        }
         timer(i);
         i += 1;
 

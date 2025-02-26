@@ -18,26 +18,22 @@ struct LifeRule {
     f64         start_dead_chance;
 };
 
-using WorkerFn =
-    std::function<void(const LifeRule &, usize lower, usize upper)>;
-
 class Life {
     std::vector<CellState> cells;
-    usize                  size;
+    u32                    size;
     f32                    max_distance;
     u8                     dimension;
 
-    void visit_multithread(const LifeRule &rule, WorkerFn work);
-    void init_random_worker(const LifeRule &rule, usize lower, usize upper);
-    u8   count_neighbours(u8 x, u8 y, u8 z) const;
+    u8        count_neighbours(i32 x, i32 y, i32 z) const;
     CellState get(u8 x, u8 y, u8 z) const;
     CellState set(u8 x, u8 y, u8 z, CellState state);
+    void      update_single(const LifeRule &rule);
 
-    constexpr inline size_t idx(size_t x, size_t y, size_t z) const {
+    constexpr inline u32 idx(u32 x, u32 y, u32 z) const {
         return (z * this->dimension + y) * this->dimension + x;
     }
 
-    constexpr inline std::array<u8, 3> life_reverse_idx(size_t idx) const {
+    constexpr inline std::array<u8, 3> reverse_idx(u32 idx) const {
         u8 x = (idx % (this->dimension * this->dimension)) % this->dimension;
         u8 y =
             ((idx % (this->dimension * this->dimension)) - x) / this->dimension;
@@ -47,19 +43,21 @@ class Life {
 
   public:
     void update_size(u8 dimension);
-    void update_worker(const LifeRule &rule, usize lower, usize upper);
+    void update_worker(const LifeRule &rule, u32 lower, u32 upper);
     void init_center_random(u8 state_count, f64 dead_chance);
     void init_full_random(u8 state_count, f64 dead_chance);
     void update(const LifeRule &rule);
 
     std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>
-    draw(CellColorFn cell_color) const;
+    draw_worker(const CellColorFn &cell_color, u32 lower, u32 upper) const;
+    std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>
+    draw(const CellColorFn &cell_color) const;
 
     constexpr inline u8 get_dimension() const {
         return this->dimension;
     }
 
-    constexpr inline usize get_size() const {
+    constexpr inline u32 get_size() const {
         return this->size;
     }
 
