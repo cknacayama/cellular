@@ -8,8 +8,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <util/util.hpp>
 
-static void terminate_app() {
-    deinit();
+[[noreturn]] static void terminate_app() {
     glfwTerminate();
     std::exit(1);
 }
@@ -41,6 +40,7 @@ Shader::Shader(
         geom_code     = geom_stream.str();
         fragment_code = fragment_stream.str();
     }
+
     const char *vertex_code_cstr   = vertex_code.c_str();
     const char *geom_code_cstr     = geom_code.c_str();
     const char *fragment_code_cstr = fragment_code.c_str();
@@ -49,34 +49,34 @@ Shader::Shader(
     char info_log[512];
 
     u32 vertex = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex, 1, &vertex_code_cstr, NULL);
+    glShaderSource(vertex, 1, &vertex_code_cstr, nullptr);
     glCompileShader(vertex);
     glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
     if (!success) {
-        glGetShaderInfoLog(vertex, 512, NULL, info_log);
+        glGetShaderInfoLog(vertex, 512, nullptr, info_log);
         eprintln("Vertex shader compilation failed: {}", info_log);
         terminate_app();
-    };
+    }
 
     u32 geom = glCreateShader(GL_GEOMETRY_SHADER);
-    glShaderSource(geom, 1, &geom_code_cstr, NULL);
+    glShaderSource(geom, 1, &geom_code_cstr, nullptr);
     glCompileShader(geom);
     glGetShaderiv(geom, GL_COMPILE_STATUS, &success);
     if (!success) {
-        glGetShaderInfoLog(geom, 512, NULL, info_log);
+        glGetShaderInfoLog(geom, 512, nullptr, info_log);
         eprintln("Geometry shader compilation failed: {}", info_log);
         terminate_app();
-    };
+    }
 
     u32 fragment = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment, 1, &fragment_code_cstr, NULL);
+    glShaderSource(fragment, 1, &fragment_code_cstr, nullptr);
     glCompileShader(fragment);
     glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
     if (!success) {
-        glGetShaderInfoLog(fragment, 512, NULL, info_log);
+        glGetShaderInfoLog(fragment, 512, nullptr, info_log);
         eprintln("Fragment shader compilation failed: {}", info_log);
         terminate_app();
-    };
+    }
 
     this->id = glCreateProgram();
     glAttachShader(this->id, vertex);
@@ -85,7 +85,7 @@ Shader::Shader(
     glLinkProgram(this->id);
     glGetProgramiv(this->id, GL_LINK_STATUS, &success);
     if (!success) {
-        glGetProgramInfoLog(this->id, 512, NULL, info_log);
+        glGetProgramInfoLog(this->id, 512, nullptr, info_log);
         eprintln("Shader linking failed: {}", info_log);
         terminate_app();
     }
@@ -121,36 +121,4 @@ std::optional<u32> Shader::get_uniform(const std::string &name) const {
     } else {
         return static_cast<u32>(loc);
     }
-}
-
-bool Shader::set(const std::string &name, glm::mat4x4 data) const {
-    if (auto loc = this->get_uniform(name)) {
-        glUniformMatrix4fv(loc.value(), 1, false, glm::value_ptr(data));
-        return true;
-    }
-    return false;
-}
-
-bool Shader::set(const std::string &name, glm::vec3 data) const {
-    if (auto loc = this->get_uniform(name)) {
-        glUniform3fv(loc.value(), 1, glm::value_ptr(data));
-        return true;
-    }
-    return false;
-}
-
-bool Shader::set(const std::string &name, bool data) const {
-    if (auto loc = this->get_uniform(name)) {
-        glUniform1i(loc.value(), data);
-        return true;
-    }
-    return false;
-}
-
-bool Shader::set(const std::string &name, f32 data) const {
-    if (auto loc = this->get_uniform(name)) {
-        glUniform1f(loc.value(), data);
-        return true;
-    }
-    return false;
 }

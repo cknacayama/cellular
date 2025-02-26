@@ -1,13 +1,13 @@
 #include <cell/app.hpp>
-#include <cstddef>
 #include <util/util.hpp>
 
 int main(void) {
     if (!glfwInit()) {
         return 1;
     }
+
     GLFWwindow *window = glfwCreateWindow(
-        WINDOW_WIDTH, WINDOW_HEIGHT, "3D Cellular Automaton", NULL, NULL
+        WINDOW_WIDTH, WINDOW_HEIGHT, "3D Cellular Automaton", nullptr, nullptr
     );
     if (!window) {
         eprintln("Failed to create window");
@@ -18,40 +18,31 @@ int main(void) {
 
     if (!gladLoadGL(glfwGetProcAddress)) {
         eprintln("Failed to initialize Glad");
+        glfwTerminate();
         return 1;
     }
 
     glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-    glfwSetKeyCallback(window, keyboard);
-    glfwSetScrollCallback(window, scroll);
-    glfwSetFramebufferSizeCallback(window, framebuffer_size);
-    // glfwSwapInterval(1);
+    glfwSwapInterval(1);
 
-    init();
+    {
+        AppState state = AppState();
 
-    usize i           = 0;
-    usize frame_count = 0;
-    f64   last        = glfwGetTime();
-    while (!glfwWindowShouldClose(window)) {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glfwSetWindowUserPointer(window, &state);
+        glfwSetKeyCallback(window, keyboard);
+        glfwSetScrollCallback(window, scroll);
+        glfwSetFramebufferSizeCallback(window, framebuffer_size);
 
-        display(window);
-        frame_count += 1;
-        f64 cur = glfwGetTime();
-        if (cur - last >= 1) {
-            f64 fps     = static_cast<f64>(frame_count) / (cur - last);
-            frame_count = 0;
-            last        = cur;
-            println("{} fps", fps);
+        usize i = 0;
+        while (!glfwWindowShouldClose(window)) {
+            state.render();
+            state.update(i);
+            i += 1;
+
+            glfwSwapBuffers(window);
+            glfwPollEvents();
         }
-        timer(i);
-        i += 1;
-
-        glfwSwapBuffers(window);
-        glfwPollEvents();
     }
-
-    deinit();
 
     glfwTerminate();
 

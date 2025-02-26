@@ -7,13 +7,29 @@
 #include <cell/alias.hpp>
 #include <cell/cell.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <util/util.hpp>
 
 static constexpr u8 THREAD_COUNT = 16;
 
-static Life life_clone;
-
 static inline f64 rand_f64() {
     return static_cast<f64>(rand()) / (RAND_MAX - 1);
+}
+
+Life::Life(u8 dimension) {
+    this->resize(dimension);
+}
+
+void Life::resize(u8 dimension) {
+    usize size = dimension * dimension * dimension;
+
+    assert(size % THREAD_COUNT == 0);
+    assert(dimension <= UINT8_MAX);
+    assert(size <= UINT32_MAX);
+
+    this->dimension    = dimension;
+    this->size         = static_cast<u32>(size);
+    this->max_distance = 3 * ((dimension >> 1) * (dimension >> 1));
+    this->cells.resize(size, 0);
 }
 
 CellState Life::get(u8 x, u8 y, u8 z) const {
@@ -28,19 +44,6 @@ CellState Life::set(u8 x, u8 y, u8 z, CellState state) {
     return old;
 }
 
-void Life::update_size(u8 dimension) {
-    usize size = dimension * dimension * dimension;
-
-    assert(size % THREAD_COUNT == 0);
-    assert(dimension <= UINT8_MAX);
-    assert(size * 36 <= UINT32_MAX);
-
-    this->dimension    = dimension;
-    this->size         = size;
-    this->max_distance = std::sqrt(3 * ((dimension >> 1) * (dimension >> 1)));
-    this->cells.resize(size, 0);
-}
-
 void Life::init_center_random(u8 state_count, f64 dead_chance) {
     std::ranges::fill(this->cells, 0);
 
@@ -51,7 +54,12 @@ void Life::init_center_random(u8 state_count, f64 dead_chance) {
         for (u8 y = lower; y < upper; y += 1) {
             for (u8 x = lower; x < upper; x += 1) {
                 if (rand_f64() > dead_chance) {
-                    this->set(x, y, z, (rand() % (state_count - 1)) + 1);
+                    this->set(
+                        x,
+                        y,
+                        z,
+                        static_cast<CellState>((rand() % (state_count - 1)) + 1)
+                    );
                 }
             }
         }
@@ -61,7 +69,8 @@ void Life::init_center_random(u8 state_count, f64 dead_chance) {
 void Life::init_full_random(u8 state_count, f64 dead_chance) {
     for (u32 i = 0; i < this->size; i += 1) {
         if (rand_f64() > dead_chance) {
-            this->cells[i] = (rand() % (state_count - 1)) + 1;
+            this->cells[i] =
+                static_cast<CellState>((rand() % (state_count - 1)) + 1);
         } else {
             this->cells[i] = 0;
         }
@@ -115,8 +124,9 @@ Life::draw_worker(const CellColorFn &cell_color, u32 lower, u32 upper) const {
             continue;
         }
         auto [x, y, z] = this->reverse_idx(idx);
-        auto color     = cell_color(state, x, y, z);
-        auto point     = glm::vec3(x, y, z);
+        auto color =
+            cell_color(this->max_distance, this->dimension, state, x, y, z);
+        auto point = glm::vec3(x, y, z);
         points.push_back(point);
         colors.push_back(color);
     }
@@ -132,9 +142,12 @@ u8 Life::count_neighbours(i32 x, i32 y, i32 z) const {
                 if (i == 0 && j == 0 && k == 0) {
                     continue;
                 }
-                u8 xn = std::clamp(x + i, 0, this->dimension - 1);
-                u8 yn = std::clamp(y + j, 0, this->dimension - 1);
-                u8 zn = std::clamp(z + k, 0, this->dimension - 1);
+                u8 xn =
+                    static_cast<u8>(std::clamp(x + i, 0, this->dimension - 1));
+                u8 yn =
+                    static_cast<u8>(std::clamp(y + j, 0, this->dimension - 1));
+                u8 zn =
+                    static_cast<u8>(std::clamp(z + k, 0, this->dimension - 1));
                 live_neighbours += this->get(xn, yn, zn) != 0;
             }
         }
@@ -142,24 +155,12 @@ u8 Life::count_neighbours(i32 x, i32 y, i32 z) const {
     return live_neighbours;
 }
 
-void Life::update_worker(const LifeRule &rule, u32 lower, u32 upper) {
-    for (usize i = lower; i < upper; i += 1) {
+void Life::update_worker(
+    const Life &clone, const LifeRule &rule, u32 lower, u32 upper
+) {
+    for (u32 i = lower; i < upper; i += 1) {
         auto [x, y, z]  = this->reverse_idx(i);
-        u8        count = life_clone.count_neighbours(x, y, z);
-        CellState state = this->cells[i];
-        if (state > 1 || (state == 1 && !rule.alive_rule(count))) {
-            this->cells[i] -= 1;
-        }
-        if (state == 0 && rule.dead_rule(count)) {
-            this->cells[i] = rule.state_count - 1;
-        }
-    }
-}
-
-void Life::update_single(const LifeRule &rule) {
-    for (u32 i = 0; i < this->size; i += 1) {
-        auto [x, y, z]  = this->reverse_idx(i);
-        u8        count = life_clone.count_neighbours(x, y, z);
+        u8        count = clone.count_neighbours(x, y, z);
         CellState state = this->cells[i];
         if (state > 1 || (state == 1 && !rule.alive_rule(count))) {
             this->cells[i] -= 1;
@@ -171,6 +172,8 @@ void Life::update_single(const LifeRule &rule) {
 }
 
 void Life::update(const LifeRule &rule) {
+    static Life life_clone = Life(0);
+
     life_clone = *this;
 
     u32 inc   = this->size / THREAD_COUNT;
@@ -181,7 +184,7 @@ void Life::update(const LifeRule &rule) {
 
     for (auto &t : threads) {
         t     = std::thread([this, rule, lower, upper]() {
-            this->update_worker(rule, lower, upper);
+            this->update_worker(life_clone, rule, lower, upper);
         });
         lower = upper;
         upper += inc;

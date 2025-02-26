@@ -8,7 +8,8 @@
 
 using CellState   = u8;
 using LifeRuleFn  = std::function<bool(u8)>;
-using CellColorFn = std::function<glm::vec3(CellState, u8 x, u8 y, u8 z)>;
+using CellColorFn = std::function<
+    glm::vec3(f32 max_distance, u8 dimension, CellState, u8 x, u8 y, u8 z)>;
 
 struct LifeRule {
     LifeRuleFn  alive_rule;
@@ -41,15 +42,19 @@ class Life {
         return {x, y, z};
     }
 
+    void update_worker(
+        const Life &clone, const LifeRule &rule, u32 lower, u32 upper
+    );
+    std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>
+    draw_worker(const CellColorFn &cell_color, u32 lower, u32 upper) const;
+
   public:
-    void update_size(u8 dimension);
-    void update_worker(const LifeRule &rule, u32 lower, u32 upper);
+    Life(u8 dimension);
+
+    void resize(u8 dimension);
     void init_center_random(u8 state_count, f64 dead_chance);
     void init_full_random(u8 state_count, f64 dead_chance);
     void update(const LifeRule &rule);
-
-    std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>
-    draw_worker(const CellColorFn &cell_color, u32 lower, u32 upper) const;
     std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>
     draw(const CellColorFn &cell_color) const;
 
@@ -61,12 +66,13 @@ class Life {
         return this->size;
     }
 
+    constexpr inline usize get_capacity() const {
+        return this->cells.capacity();
+    }
+
     constexpr inline f32 get_max_distance() const {
         return this->max_distance;
     }
 };
-
-void init_buffers();
-void delete_buffers();
 
 #endif

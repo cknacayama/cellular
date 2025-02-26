@@ -6,7 +6,7 @@ INCLUDE_PATH := include
 CC := g++-13
 CPP_STD := -std=c++23
 CPP_FLAGS := -O3
-CPP_FLAGS += -I$(INCLUDE_PATH) -g -Wall -Wextra -Wno-unused-parameter $(CPP_STD)
+CPP_FLAGS += -I$(INCLUDE_PATH) $(CPP_STD) -g -Werror -Wall -Wextra -Wno-unused-parameter
 LIB_FLAGS := -lGL -lglfw
 OBJ_FLAGS := $(CPP_FLAGS) -c
 
