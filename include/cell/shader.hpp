@@ -10,7 +10,7 @@
 namespace cell {
 
 class Shader {
-    u32 id;
+    u32 id{};
 
   public:
     Shader(

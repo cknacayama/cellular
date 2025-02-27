@@ -2,6 +2,7 @@
 #include <array>
 #include <cassert>
 #include <mutex>
+#include <random>
 #include <thread>
 
 #include <cell/alias.hpp>
@@ -14,9 +15,18 @@ namespace cell {
 namespace {
 constexpr u8 THREAD_COUNT = 16;
 
-inline auto rand_f64() -> f64 {
-    return static_cast<f64>(rand()) / (RAND_MAX - 1);
+inline auto random_state(u8 state_count, f64 dead_chance) -> CellState {
+    static thread_local std::random_device r;
+    static thread_local std::mt19937       generator(r());
+
+    std::uniform_real_distribution<f64> distribution(0.0F, 1.0F);
+    if (distribution(generator) > dead_chance) {
+        std::uniform_int_distribution<u8> distribution(1, state_count - 1);
+        return distribution(generator);
+    }
+    return 0;
 }
+
 } // namespace
 
 Life::Life(u8 dimension) {
@@ -59,27 +69,15 @@ void Life::init_center_random(u8 state_count, f64 dead_chance) {
     for (u8 z = lower; z < upper; z += 1) {
         for (u8 y = lower; y < upper; y += 1) {
             for (u8 x = lower; x < upper; x += 1) {
-                if (rand_f64() > dead_chance) {
-                    this->set(
-                        x,
-                        y,
-                        z,
-                        static_cast<CellState>((rand() % (state_count - 1)) + 1)
-                    );
-                }
+                this->set(x, y, z, random_state(state_count, dead_chance));
             }
         }
     }
 }
 
 void Life::init_full_random(u8 state_count, f64 dead_chance) {
-    for (u32 i = 0; i < this->size; i += 1) {
-        if (rand_f64() > dead_chance) {
-            this->cells[i] =
-                static_cast<CellState>((rand() % (state_count - 1)) + 1);
-        } else {
-            this->cells[i] = 0;
-        }
+    for (auto &cell : this->cells) {
+        cell = random_state(state_count, dead_chance);
     }
 }
 
@@ -94,15 +92,15 @@ auto Life::draw(CellColorFn const &cell_color) const
     u32       lower = 0;
     u32       upper = inc;
 
-    std::array<std::thread, THREAD_COUNT> threads;
+    std::array<std::jthread, THREAD_COUNT> threads;
 
     for (auto &t : threads) {
-        t = std::thread([this, &points, &colors, cell_color, lower, upper]() {
+        t = std::jthread([this, &points, &colors, cell_color, lower, upper]() {
             auto [p, c] = this->draw_worker(cell_color, lower, upper);
             {
                 std::lock_guard<std::mutex> const lock(vec_mutex);
-                std::move(p.begin(), p.end(), std::back_inserter(points));
-                std::move(c.begin(), c.end(), std::back_inserter(colors));
+                std::ranges::move(p, std::back_inserter(points));
+                std::ranges::move(c, std::back_inserter(colors));
             }
         });
         lower = upper;
@@ -116,8 +114,9 @@ auto Life::draw(CellColorFn const &cell_color) const
     return {std::move(points), std::move(colors)};
 }
 
-auto Life::draw_worker(CellColorFn const &cell_color, u32 lower, u32 upper)
-    const -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>> {
+auto Life::draw_worker(
+    CellColorFn const &cell_color, u32 lower, u32 upper
+) const -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>> {
     std::vector<glm::vec3> points;
     std::vector<glm::vec3> colors;
 
@@ -186,19 +185,26 @@ void Life::update(LifeRule const &rule) {
     u32       lower = 0;
     u32       upper = inc;
 
-    std::array<std::thread, THREAD_COUNT> threads;
+    std::array<std::jthread, THREAD_COUNT> threads;
 
     for (auto &t : threads) {
-        t     = std::thread([this, rule, lower, upper]() {
+        t     = std::jthread([this, rule, lower, upper]() {
             this->update_worker(life_clone, rule, lower, upper);
         });
         lower = upper;
         upper += inc;
     }
-
-    for (auto &t : threads) {
-        t.join();
-    }
 }
 
+constexpr auto Life::idx(u32 x, u32 y, u32 z) const -> u32 {
+    return ((z * this->dimension + y) * this->dimension) + x;
+}
+
+constexpr auto Life::reverse_idx(u32 idx) const -> std::array<u8, 3> {
+    u8 const x = (idx % (this->dimension * this->dimension)) % this->dimension;
+    u8 const y =
+        ((idx % (this->dimension * this->dimension)) - x) / this->dimension;
+    u8 const z = (idx - y - x) / (this->dimension * this->dimension);
+    return {x, y, z};
+}
 } // namespace cell

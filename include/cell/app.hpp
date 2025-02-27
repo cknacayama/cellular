@@ -30,7 +30,7 @@ class AppState {
     AppState(AppState const &)                     = default;
     AppState(AppState &&)                          = default;
     auto operator=(AppState const &) -> AppState & = default;
-    auto operator=(AppState &&) -> AppState      & = default;
+    auto operator=(AppState &&) -> AppState &      = default;
 
     void restart();
     void render() const;
@@ -46,10 +46,6 @@ class AppState {
 
     void run();
 };
-
-void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods);
-void scroll(GLFWwindow *window, double xoffset, double yoffset);
-void framebuffer_size(GLFWwindow *window, int width, int height);
 
 } // namespace cell
 

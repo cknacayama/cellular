@@ -49,7 +49,7 @@ inline auto distance_from_center(f32 x, f32 y, f32 z, u8 dimension) -> f32 {
     f32 const dx     = x - static_cast<f32>(dimension >> 1U);
     f32 const dy     = y - static_cast<f32>(dimension >> 1U);
     f32 const dz     = z - static_cast<f32>(dimension >> 1U);
-    f32 const square = dx * dx + dy * dy + dz * dz;
+    f32 const square = (dx * dx) + (dy * dy) + (dz * dz);
     return square;
 }
 
@@ -104,193 +104,46 @@ auto cell_color_decay(
 
     return {t, 0.0, 0.1};
 }
-} // namespace
-
-// rules taken from
-// https://softologyblog.wordpress.com/2019/12/28/3d-cellular-automata-3/
-static LifeRule const DEFAULT_RULE = {
-    cell_rule_default, cell_rule_default, cell_color_default, 5, 0.85
-};
-
-static LifeRule const SIX_EIGHT_RULE = {
-    cell_rule_6_8,
-    cell_rule_6_8,
-    cell_color_6_8,
-    2,
-    0.70,
-};
-static LifeRule const CLOUD_RULE = {
-    cell_alive_rule_cloud,
-    cell_dead_rule_cloud,
-    cell_color_cloud,
-    2,
-    0.5,
-};
-
-static LifeRule const DECAY_RULE = {
-    cell_alive_rule_decay,
-    cell_dead_rule_decay,
-    cell_color_decay,
-    5,
-    0.65,
-};
-
-void AppState::render() const {
-    f32 const time = static_cast<f32>(glfwGetTime());
-
-    f32 const radius = static_cast<f32>(this->life.get_dimension()) * 2.1F;
-    f32 const cam_x  = std::sin(time / 5) * radius;
-    f32 const cam_y  = this->life.get_dimension();
-    f32 const cam_z  = std::cos(time / 5) * radius;
-
-    glm::vec3 const eye_pos(cam_x, cam_y, cam_z);
-    glm::vec3 const center(0.0, 0.0, 0.0);
-    glm::vec3 const up(0.0, 1.0, 0.0);
-
-    auto view = glm::lookAt(eye_pos, center, up);
-
-    auto [points, colors] = this->life.draw(this->life_rule.cell_color);
-
-    this->shader_program.use();
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glBindBuffer(GL_ARRAY_BUFFER, this->position_buffer);
-    glBufferData(
-        GL_ARRAY_BUFFER,
-        static_cast<isize>(points.size() * sizeof(glm::vec3)),
-        points.data(),
-        GL_STATIC_DRAW
-    );
-    glVertexAttribPointer(
-        this->vertex_position, 3, GL_FLOAT, GL_FALSE, 0, nullptr
-    );
-    glEnableVertexAttribArray(this->vertex_position);
-
-    glBindBuffer(GL_ARRAY_BUFFER, this->color_buffer);
-    glBufferData(
-        GL_ARRAY_BUFFER,
-        static_cast<isize>(colors.size() * sizeof(glm::vec3)),
-        colors.data(),
-        GL_STATIC_DRAW
-    );
-    glVertexAttribPointer(
-        this->vertex_color, 3, GL_FLOAT, GL_FALSE, 0, nullptr
-    );
-    glEnableVertexAttribArray(this->vertex_color);
-
-    f64 const start =
-        -((static_cast<f64>(this->life.get_dimension()) / 2) - 0.5);
-    auto translate = glm::translate(view, {start, start, start});
-    auto mvp       = this->projection * translate;
-
-    glUniformMatrix4fv(this->mvp_location, 1, 0U, glm::value_ptr(mvp));
-    glDrawArrays(GL_POINTS, 0, static_cast<i32>(points.size()));
-
-    glDisableVertexAttribArray(this->vertex_position);
-    glDisableVertexAttribArray(this->vertex_color);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-}
 
 void framebuffer_size(GLFWwindow * /*window*/, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
-void AppState::update(usize value) {
-    if (value % this->update_rate == 0) {
-        this->life.update(this->life_rule);
-    }
-}
+} // namespace
 
-void AppState::restart() {
-    if (this->full_init) {
-        this->life.init_full_random(
-            this->life_rule.state_count, this->life_rule.start_dead_chance
-        );
-    } else if (this->life.get_dimension() <= 44) {
-        f64 const dead_chance = this->life_rule.start_dead_chance * 0.7;
-        this->life.init_full_random(this->life_rule.state_count, dead_chance);
-    } else {
-        f64 const dead_chance = this->life_rule.start_dead_chance;
-        this->life.init_center_random(this->life_rule.state_count, dead_chance);
-    }
-}
+// rules taken from
+// https://softologyblog.wordpress.com/2019/12/28/3d-cellular-automata-3/
+static LifeRule const DEFAULT_RULE = {
+    .alive_rule        = cell_rule_default,
+    .dead_rule         = cell_rule_default,
+    .cell_color        = cell_color_default,
+    .state_count       = 5,
+    .start_dead_chance = 0.85
+};
 
-AppState::AppState()
-    : life(Life(100)), projection(glm::perspective<f32>(
-                           glm::pi<f32>() / 4.0F, ASPECT_RATIO, 0.1F, 300.0F
-                       )),
-      life_rule(CLOUD_RULE), shader_program() {
+static LifeRule const SIX_EIGHT_RULE = {
+    .alive_rule        = cell_rule_6_8,
+    .dead_rule         = cell_rule_6_8,
+    .cell_color        = cell_color_6_8,
+    .state_count       = 2,
+    .start_dead_chance = 0.70,
+};
 
-    if (glfwInit() == 0) {
-        panic("Failed to init GLFW");
-    }
+static LifeRule const CLOUD_RULE = {
+    .alive_rule        = cell_alive_rule_cloud,
+    .dead_rule         = cell_dead_rule_cloud,
+    .cell_color        = cell_color_cloud,
+    .state_count       = 2,
+    .start_dead_chance = 0.5,
+};
 
-    this->window = glfwCreateWindow(
-        WINDOW_WIDTH, WINDOW_HEIGHT, "3D Cellular Automaton", nullptr, nullptr
-    );
-    if (this->window == nullptr) {
-        panic("Failed to create window");
-    }
-    glfwMakeContextCurrent(this->window);
-
-    if (gladLoadGL(glfwGetProcAddress) == 0) {
-        panic("Failed to load glad");
-    }
-
-    glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-    glfwSwapInterval(1);
-
-    glfwSetWindowUserPointer(this->window, this);
-    glfwSetKeyCallback(this->window, keyboard);
-    glfwSetScrollCallback(this->window, scroll);
-    glfwSetFramebufferSizeCallback(this->window, framebuffer_size);
-
-    this->shader_program = Shader(
-        "shader/shader.vert", "shader/shader.geom", "shader/shader.frag"
-    );
-
-    glClearColor(0.0F, 0.0F, 0.0F, 0.0F); // define a cor de fundo
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
-
-    glGenVertexArrays(1, &this->VAO);
-    glBindVertexArray(this->VAO);
-
-    glGenBuffers(1, &this->position_buffer);
-    glGenBuffers(1, &this->color_buffer);
-
-    glBindVertexArray(0);
-
-    this->vertex_position =
-        this->shader_program.get_attribute("vertex_position").value();
-    this->vertex_color =
-        this->shader_program.get_attribute("vertex_color").value();
-    this->mvp_location = this->shader_program.get_uniform("MVP").value();
-
-    this->restart();
-}
-
-AppState::~AppState() {
-    glDeleteVertexArrays(1, &this->VAO);
-    glDeleteBuffers(1, &this->position_buffer);
-    glDeleteBuffers(1, &this->color_buffer);
-    glfwTerminate();
-}
-
-void AppState::run() {
-    usize iteration = 0;
-    while (glfwWindowShouldClose(this->window) == 0) {
-        this->render();
-        this->update(iteration);
-        iteration += 1;
-
-        glfwSwapBuffers(this->window);
-        glfwPollEvents();
-    }
-}
+static LifeRule const DECAY_RULE = {
+    .alive_rule        = cell_alive_rule_decay,
+    .dead_rule         = cell_dead_rule_decay,
+    .cell_color        = cell_color_decay,
+    .state_count       = 5,
+    .start_dead_chance = 0.65,
+};
 
 void scroll(GLFWwindow *window, double /*xoffset*/, double yoffset) {
     if (yoffset == 0.0) {
@@ -363,6 +216,178 @@ void keyboard(
     }
     if (restart) {
         state->restart();
+    }
+}
+
+void AppState::render() const {
+    f32 const time = static_cast<f32>(glfwGetTime());
+
+    f32 const radius = static_cast<f32>(this->life.get_dimension()) * 2.1F;
+    f32 const cam_x  = std::sin(time / 5) * radius;
+    f32 const cam_y  = this->life.get_dimension();
+    f32 const cam_z  = std::cos(time / 5) * radius;
+
+    glm::vec3 const eye_pos(cam_x, cam_y, cam_z);
+    glm::vec3 const center(0.0, 0.0, 0.0);
+    glm::vec3 const up(0.0, 1.0, 0.0);
+
+    auto view = glm::lookAt(eye_pos, center, up);
+
+    auto [points, colors] = this->life.draw(this->life_rule.cell_color);
+
+    this->shader_program.use();
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glBindBuffer(GL_ARRAY_BUFFER, this->position_buffer);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        static_cast<isize>(points.size() * sizeof(glm::vec3)),
+        points.data(),
+        GL_STATIC_DRAW
+    );
+    glVertexAttribPointer(
+        this->vertex_position, 3, GL_FLOAT, GL_FALSE, 0, nullptr
+    );
+    glEnableVertexAttribArray(this->vertex_position);
+
+    glBindBuffer(GL_ARRAY_BUFFER, this->color_buffer);
+    glBufferData(
+        GL_ARRAY_BUFFER,
+        static_cast<isize>(colors.size() * sizeof(glm::vec3)),
+        colors.data(),
+        GL_STATIC_DRAW
+    );
+    glVertexAttribPointer(
+        this->vertex_color, 3, GL_FLOAT, GL_FALSE, 0, nullptr
+    );
+    glEnableVertexAttribArray(this->vertex_color);
+
+    f64 const start =
+        -((static_cast<f64>(this->life.get_dimension()) / 2) - 0.5);
+    auto translate = glm::translate(view, {start, start, start});
+    auto mvp       = this->projection * translate;
+
+    glUniformMatrix4fv(this->mvp_location, 1, 0U, glm::value_ptr(mvp));
+    glDrawArrays(GL_POINTS, 0, static_cast<i32>(points.size()));
+
+    glDisableVertexAttribArray(this->vertex_position);
+    glDisableVertexAttribArray(this->vertex_color);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+}
+
+void AppState::update(usize value) {
+    if (value % this->update_rate == 0) {
+        this->life.update(this->life_rule);
+    }
+}
+
+void AppState::restart() {
+    if (this->full_init) {
+        this->life.init_full_random(
+            this->life_rule.state_count, this->life_rule.start_dead_chance
+        );
+    } else if (this->life.get_dimension() <= 44) {
+        f64 const dead_chance = this->life_rule.start_dead_chance * 0.7;
+        this->life.init_full_random(this->life_rule.state_count, dead_chance);
+    } else {
+        f64 const dead_chance = this->life_rule.start_dead_chance;
+        this->life.init_center_random(this->life_rule.state_count, dead_chance);
+    }
+}
+
+AppState::AppState()
+    : life(Life(100)), projection(
+                           glm::perspective<f32>(
+                               glm::pi<f32>() / 4.0F, ASPECT_RATIO, 0.1F, 300.0F
+                           )
+                       ),
+      life_rule(CLOUD_RULE) {
+
+    if (glfwInit() == 0) {
+        panic("Failed to init GLFW");
+    }
+
+    this->window = glfwCreateWindow(
+        WINDOW_WIDTH, WINDOW_HEIGHT, "3D Cellular Automaton", nullptr, nullptr
+    );
+    if (this->window == nullptr) {
+        panic("Failed to create window");
+    }
+    glfwMakeContextCurrent(this->window);
+
+    if (gladLoadGL(glfwGetProcAddress) == 0) {
+        panic("Failed to load glad");
+    }
+
+    glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+    glfwSwapInterval(1);
+
+    glfwSetWindowUserPointer(this->window, this);
+    glfwSetKeyCallback(this->window, keyboard);
+    glfwSetScrollCallback(this->window, scroll);
+    glfwSetFramebufferSizeCallback(this->window, framebuffer_size);
+
+    this->shader_program = Shader(
+        "shader/shader.vert", "shader/shader.geom", "shader/shader.frag"
+    );
+
+    glClearColor(0.0F, 0.0F, 0.0F, 0.0F); // define a cor de fundo
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+
+    glGenVertexArrays(1, &this->VAO);
+    glBindVertexArray(this->VAO);
+
+    glGenBuffers(1, &this->position_buffer);
+    glGenBuffers(1, &this->color_buffer);
+
+    glBindVertexArray(0);
+
+    std::optional<i32> const vertex_pos =
+        this->shader_program.get_attribute("vertex_position");
+    std::optional<i32> const vertex_color =
+        this->shader_program.get_attribute("vertex_color");
+    std::optional<i32> const mvp = this->shader_program.get_uniform("MVP");
+    if (!vertex_pos.has_value() || !vertex_color.has_value() ||
+        !mvp.has_value()) {
+        panic("Failed to get position of attribute");
+    }
+    this->vertex_position = vertex_pos.value();
+    this->vertex_color    = vertex_color.value();
+    this->mvp_location    = mvp.value();
+
+    this->restart();
+}
+
+AppState::~AppState() {
+    glDeleteVertexArrays(1, &this->VAO);
+    glDeleteBuffers(1, &this->position_buffer);
+    glDeleteBuffers(1, &this->color_buffer);
+    glfwTerminate();
+}
+
+void AppState::run() {
+    usize iteration   = 0;
+    usize frame_count = 0;
+    f64   last        = glfwGetTime();
+    while (glfwWindowShouldClose(this->window) == 0) {
+        this->render();
+        frame_count += 1;
+        f64 const current = glfwGetTime();
+        if (current - last >= 1.0F) {
+            f64 fps = static_cast<f64>(frame_count) / (current - last);
+            println("{} fps", fps);
+            frame_count = 0;
+            last        = current;
+        }
+        this->update(iteration);
+        iteration += 1;
+
+        glfwSwapBuffers(this->window);
+        glfwPollEvents();
     }
 }
 

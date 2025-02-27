@@ -32,17 +32,9 @@ class Life {
     auto               set(u8 x, u8 y, u8 z, CellState state) -> CellState;
     void               update_single(LifeRule const &rule);
 
-    [[nodiscard]] constexpr inline auto idx(u32 x, u32 y, u32 z) const -> u32 {
-        return (z * this->dimension + y) * this->dimension + x;
-    }
-
-    [[nodiscard]] constexpr inline auto reverse_idx(u32 idx) const {
-        u8 x = (idx % (this->dimension * this->dimension)) % this->dimension;
-        u8 y =
-            ((idx % (this->dimension * this->dimension)) - x) / this->dimension;
-        u8 z = (idx - y - x) / (this->dimension * this->dimension);
-        return std::make_tuple(x, y, z);
-    }
+    [[nodiscard]] constexpr auto idx(u32 x, u32 y, u32 z) const -> u32;
+    [[nodiscard]] constexpr auto reverse_idx(u32 idx) const
+        -> std::array<u8, 3>;
 
     void update_worker(
         Life const &clone, LifeRule const &rule, u32 lower, u32 upper
@@ -61,19 +53,19 @@ class Life {
     [[nodiscard]] auto draw(CellColorFn const &cell_color) const
         -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>;
 
-    [[nodiscard]] constexpr inline auto get_dimension() const -> u8 {
+    [[nodiscard]] constexpr auto get_dimension() const -> u8 {
         return this->dimension;
     }
 
-    [[nodiscard]] constexpr inline auto get_size() const -> u32 {
+    [[nodiscard]] constexpr auto get_size() const -> u32 {
         return this->size;
     }
 
-    [[nodiscard]] constexpr inline auto get_capacity() const -> usize {
+    [[nodiscard]] constexpr auto get_capacity() const -> usize {
         return this->cells.capacity();
     }
 
-    [[nodiscard]] constexpr inline auto get_max_distance() const -> f32 {
+    [[nodiscard]] constexpr auto get_max_distance() const -> f32 {
         return this->max_distance;
     }
 };
