@@ -58,9 +58,7 @@ inline void debug(
     std::string_view expr,
     T const         &arg
 ) {
-    eprintln(
-        "[{}:{}:{}] {} = {}", file_name, func, line, expr, std::forward<T>(arg)
-    );
+    eprintln("[{}:{}:{}] {} = {}", file_name, func, line, expr, arg);
 }
 
 #define DEBUG(arg) debug(__FILE__, __LINE__, __func__, #arg, arg)
