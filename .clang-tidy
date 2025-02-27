@@ -1,0 +1,23 @@
+Checks: "*,
+  performance-*,
+  modernize-*,
+  bugprone-*,
+  readability-*,
+  clang-analyzer-*,
+  misc-const-correctness,
+  -abseil-*,
+  -altera-*,
+  -android-*,
+  -fuchsia-*,
+  -google-*,
+  -llvm*,
+  -misc-include-cleaner,
+  -readability-identifier-length,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -bugprone-easily-swappable-parameters,
+  -hicpp-signed-bitwise
+"
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+FormatStyle:     none

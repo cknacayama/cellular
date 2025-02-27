@@ -6,6 +6,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+namespace cell {
+
 using CellState   = u8;
 using LifeRuleFn  = std::function<bool(u8)>;
 using CellColorFn = std::function<
@@ -21,58 +23,61 @@ struct LifeRule {
 
 class Life {
     std::vector<CellState> cells;
-    u32                    size;
-    f32                    max_distance;
-    u8                     dimension;
+    u32                    size{};
+    f32                    max_distance{};
+    u8                     dimension{};
 
-    u8        count_neighbours(i32 x, i32 y, i32 z) const;
-    CellState get(u8 x, u8 y, u8 z) const;
-    CellState set(u8 x, u8 y, u8 z, CellState state);
-    void      update_single(const LifeRule &rule);
+    [[nodiscard]] auto count_neighbours(i32 x, i32 y, i32 z) const -> u8;
+    [[nodiscard]] auto get(u8 x, u8 y, u8 z) const -> CellState;
+    auto               set(u8 x, u8 y, u8 z, CellState state) -> CellState;
+    void               update_single(LifeRule const &rule);
 
-    constexpr inline u32 idx(u32 x, u32 y, u32 z) const {
+    [[nodiscard]] constexpr inline auto idx(u32 x, u32 y, u32 z) const -> u32 {
         return (z * this->dimension + y) * this->dimension + x;
     }
 
-    constexpr inline std::array<u8, 3> reverse_idx(u32 idx) const {
+    [[nodiscard]] constexpr inline auto reverse_idx(u32 idx) const {
         u8 x = (idx % (this->dimension * this->dimension)) % this->dimension;
         u8 y =
             ((idx % (this->dimension * this->dimension)) - x) / this->dimension;
         u8 z = (idx - y - x) / (this->dimension * this->dimension);
-        return {x, y, z};
+        return std::make_tuple(x, y, z);
     }
 
     void update_worker(
-        const Life &clone, const LifeRule &rule, u32 lower, u32 upper
+        Life const &clone, LifeRule const &rule, u32 lower, u32 upper
     );
-    std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>
-    draw_worker(const CellColorFn &cell_color, u32 lower, u32 upper) const;
+    [[nodiscard]] auto
+    draw_worker(CellColorFn const &cell_color, u32 lower, u32 upper) const
+        -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>;
 
   public:
-    Life(u8 dimension);
+    explicit Life(u8 dimension);
 
-    void resize(u8 dimension);
-    void init_center_random(u8 state_count, f64 dead_chance);
-    void init_full_random(u8 state_count, f64 dead_chance);
-    void update(const LifeRule &rule);
-    std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>
-    draw(const CellColorFn &cell_color) const;
+    void               resize(u8 dimension);
+    void               init_center_random(u8 state_count, f64 dead_chance);
+    void               init_full_random(u8 state_count, f64 dead_chance);
+    void               update(LifeRule const &rule);
+    [[nodiscard]] auto draw(CellColorFn const &cell_color) const
+        -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>;
 
-    constexpr inline u8 get_dimension() const {
+    [[nodiscard]] constexpr inline auto get_dimension() const -> u8 {
         return this->dimension;
     }
 
-    constexpr inline u32 get_size() const {
+    [[nodiscard]] constexpr inline auto get_size() const -> u32 {
         return this->size;
     }
 
-    constexpr inline usize get_capacity() const {
+    [[nodiscard]] constexpr inline auto get_capacity() const -> usize {
         return this->cells.capacity();
     }
 
-    constexpr inline f32 get_max_distance() const {
+    [[nodiscard]] constexpr inline auto get_max_distance() const -> f32 {
         return this->max_distance;
     }
 };
+
+} // namespace cell
 
 #endif

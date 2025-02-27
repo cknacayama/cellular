@@ -42,6 +42,13 @@ inline void eprintln(std::format_string<_Args...> __fmt, _Args &&...__args) {
     println(std::cerr, __fmt, std::forward<_Args>(__args)...);
 }
 
+template <typename... _Args>
+[[noreturn]] inline void
+panic(std::format_string<_Args...> __fmt, _Args &&...__args) {
+    println(std::cerr, __fmt, std::forward<_Args>(__args)...);
+    std::terminate();
+}
+
 template <typename T>
 inline void debug(
     std::string_view file_name,

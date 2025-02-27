@@ -7,22 +7,27 @@
 #include <cell/alias.hpp>
 #include <glm/mat4x4.hpp>
 
+namespace cell {
+
 class Shader {
     u32 id;
 
   public:
     Shader(
-        const char *vertex_path,
-        const char *geom_path,
-        const char *fragment_path
+        char const *vertex_path,
+        char const *geom_path,
+        char const *fragment_path
     );
     Shader() = default;
 
-    u32  get_id() const;
-    void use() const;
+    [[nodiscard]] auto get_id() const -> u32;
+    void               use() const;
 
-    std::optional<u32> get_attribute(const std::string &name) const;
-    std::optional<u32> get_uniform(const std::string &name) const;
+    [[nodiscard]] auto get_attribute(std::string const &name) const
+        -> std::optional<i32>;
+    [[nodiscard]] auto get_uniform(std::string const &name) const
+        -> std::optional<i32>;
 };
 
+} // namespace cell
 #endif

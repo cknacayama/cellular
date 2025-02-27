@@ -5,26 +5,36 @@
 #include <cell/cell.hpp>
 #include <cell/shader.hpp>
 
-static constexpr i32 WINDOW_WIDTH  = 1920;
-static constexpr i32 WINDOW_HEIGHT = 1080;
+namespace cell {
+
+static constexpr i32 WINDOW_WIDTH  = 900;
+static constexpr i32 WINDOW_HEIGHT = 900;
 static constexpr f32 ASPECT_RATIO =
     static_cast<f32>(WINDOW_WIDTH) / static_cast<f32>(WINDOW_HEIGHT);
 
 class AppState {
     Life        life;
+    GLFWwindow *window;
     glm::mat4x4 projection;
     LifeRule    life_rule;
     usize       update_rate = 4;
     Shader      shader_program;
-    GLuint      VAO;
-    GLuint      position_buffer;
-    GLuint      color_buffer;
-    GLuint      mvp_location;
-    GLuint      vertex_position;
-    GLuint      vertex_color;
+    GLuint      VAO{};
+    GLuint      position_buffer{};
+    GLuint      color_buffer{};
+    GLint       mvp_location;
+    GLint       vertex_position;
+    GLint       vertex_color;
     bool        full_init = true;
 
+    AppState(AppState const &)                     = default;
+    AppState(AppState &&)                          = default;
+    auto operator=(AppState const &) -> AppState & = default;
+    auto operator=(AppState &&) -> AppState      & = default;
+
     void restart();
+    void render() const;
+    void update(usize value);
 
     friend void
     keyboard(GLFWwindow *window, int key, int scancode, int action, int mods);
@@ -33,12 +43,14 @@ class AppState {
   public:
     AppState();
     ~AppState();
-    void render() const;
-    void update(usize value);
+
+    void run();
 };
 
 void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods);
 void scroll(GLFWwindow *window, double xoffset, double yoffset);
 void framebuffer_size(GLFWwindow *window, int width, int height);
+
+} // namespace cell
 
 #endif

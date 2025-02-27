@@ -10,42 +10,116 @@
 #include <glm/vec3.hpp>
 #include <util/util.hpp>
 
-static bool      cell_rule_default(u8 count);
-static glm::vec3 cell_color_default(
-    f32 max_distance, u8 dimension, CellState state, u8 x, u8 y, u8 z
-);
+namespace cell {
 
-static bool      cell_rule_6_8(u8 count);
-static glm::vec3 cell_color_6_8(
-    f32 max_distance, u8 dimension, CellState state, u8 x, u8 y, u8 z
-);
+namespace {
+auto cell_rule_default(u8 count) -> bool {
+    return count == 4;
+}
 
-static bool      cell_alive_rule_cloud(u8 count);
-static bool      cell_dead_rule_cloud(u8 count);
-static glm::vec3 cell_color_cloud(
-    f32 max_distance, u8 dimension, CellState state, u8 x, u8 y, u8 z
-);
+auto cell_color_default(
+    f32 /*unused*/, u8 /*unused*/, CellState state, u8 /*x*/, u8 /*y*/, u8 /*z*/
+) -> glm::vec3 {
+    f32 t = 0.0F;
+    switch (state) {
+        case 1:
+            t = 0.9F;
+            break;
+        case 2:
+            t = 0.6F;
+            break;
+        case 3:
+            t = 0.3F;
+            break;
+        case 4:
+            t = 0.09F;
+            break;
+        default:
+            break;
+    }
 
-static bool      cell_alive_rule_decay(u8 count);
-static bool      cell_dead_rule_decay(u8 count);
-static glm::vec3 cell_color_decay(
-    f32 max_distance, u8 dimension, CellState state, u8 x, u8 y, u8 z
-);
+    return {1.0, t, 0};
+}
+
+auto cell_rule_6_8(u8 count) -> bool {
+    return count >= 6 && count <= 8;
+}
+
+inline auto distance_from_center(f32 x, f32 y, f32 z, u8 dimension) -> f32 {
+    f32 const dx     = x - static_cast<f32>(dimension >> 1U);
+    f32 const dy     = y - static_cast<f32>(dimension >> 1U);
+    f32 const dz     = z - static_cast<f32>(dimension >> 1U);
+    f32 const square = dx * dx + dy * dy + dz * dz;
+    return square;
+}
+
+auto cell_color_6_8(
+    f32 max_distance, u8 dimension, CellState /*state*/, u8 x, u8 y, u8 z
+) -> glm::vec3 {
+    f32 const distance = distance_from_center(x, y, z, dimension);
+    f32 const t        = std::sqrt(distance / max_distance);
+
+    return {0.1, 1 - t, t};
+}
+
+auto cell_alive_rule_cloud(u8 count) -> bool {
+    return count >= 13 && count <= 26;
+}
+
+auto cell_dead_rule_cloud(u8 count) -> bool {
+    return count == 13 || count == 14 || (count >= 17 && count <= 19);
+}
+
+auto cell_color_cloud(
+    f32 /*max_distance*/, u8 dimension, CellState /*state*/, u8 x, u8 y, u8 z
+) -> glm::vec3 {
+    glm::vec3 color;
+    color[0] = static_cast<f32>(x) / static_cast<f32>(dimension);
+    color[1] = static_cast<f32>(y) / static_cast<f32>(dimension);
+    color[2] = static_cast<f32>(z) / static_cast<f32>(dimension);
+    return color;
+}
+
+auto cell_alive_rule_decay(u8 count) -> bool {
+    switch (count) {
+        case 1:
+        case 4:
+        case 8:
+        case 11:
+            return true;
+        default:
+            return count >= 13 && count <= 26;
+    }
+}
+
+auto cell_dead_rule_decay(u8 count) -> bool {
+    return count >= 13 && count <= 26;
+}
+
+auto cell_color_decay(
+    f32 max_distance, u8 dimension, CellState /*state*/, u8 x, u8 y, u8 z
+) -> glm::vec3 {
+    f32 const distance = distance_from_center(x, y, z, dimension);
+    f32 const t        = distance / max_distance;
+
+    return {t, 0.0, 0.1};
+}
+} // namespace
 
 // rules taken from
 // https://softologyblog.wordpress.com/2019/12/28/3d-cellular-automata-3/
-static const LifeRule DEFAULT_RULE = {
+static LifeRule const DEFAULT_RULE = {
     cell_rule_default, cell_rule_default, cell_color_default, 5, 0.85
 };
 
-static const LifeRule SIX_EIGHT_RULE = {
+static LifeRule const SIX_EIGHT_RULE = {
     cell_rule_6_8,
     cell_rule_6_8,
     cell_color_6_8,
     2,
     0.70,
 };
-static const LifeRule CLOUD_RULE = {
+static LifeRule const CLOUD_RULE = {
     cell_alive_rule_cloud,
     cell_dead_rule_cloud,
     cell_color_cloud,
@@ -53,7 +127,7 @@ static const LifeRule CLOUD_RULE = {
     0.5,
 };
 
-static const LifeRule DECAY_RULE = {
+static LifeRule const DECAY_RULE = {
     cell_alive_rule_decay,
     cell_dead_rule_decay,
     cell_color_decay,
@@ -61,25 +135,17 @@ static const LifeRule DECAY_RULE = {
     0.65,
 };
 
-static const LifeRule CUBE_RULE = {
-    [](auto) { return true; },
-    [](auto) { return true; },
-    [](auto, auto, auto, auto, auto, auto) { return glm::vec3(1, 1, 1); },
-    2,
-    0,
-};
-
 void AppState::render() const {
-    f32 time = static_cast<f32>(glfwGetTime());
+    f32 const time = static_cast<f32>(glfwGetTime());
 
-    f32 radius = this->life.get_dimension() * 2.1f;
-    f32 cam_x  = std::sin(time / 5) * radius;
-    f32 cam_y  = this->life.get_dimension();
-    f32 cam_z  = std::cos(time / 5) * radius;
+    f32 const radius = static_cast<f32>(this->life.get_dimension()) * 2.1F;
+    f32 const cam_x  = std::sin(time / 5) * radius;
+    f32 const cam_y  = this->life.get_dimension();
+    f32 const cam_z  = std::cos(time / 5) * radius;
 
-    glm::vec3 eye_pos(cam_x, cam_y, cam_z);
-    glm::vec3 center(0.0, 0.0, 0.0);
-    glm::vec3 up(0.0, 1.0, 0.0);
+    glm::vec3 const eye_pos(cam_x, cam_y, cam_z);
+    glm::vec3 const center(0.0, 0.0, 0.0);
+    glm::vec3 const up(0.0, 1.0, 0.0);
 
     auto view = glm::lookAt(eye_pos, center, up);
 
@@ -92,7 +158,7 @@ void AppState::render() const {
     glBindBuffer(GL_ARRAY_BUFFER, this->position_buffer);
     glBufferData(
         GL_ARRAY_BUFFER,
-        points.size() * sizeof(glm::vec3),
+        static_cast<isize>(points.size() * sizeof(glm::vec3)),
         points.data(),
         GL_STATIC_DRAW
     );
@@ -104,7 +170,7 @@ void AppState::render() const {
     glBindBuffer(GL_ARRAY_BUFFER, this->color_buffer);
     glBufferData(
         GL_ARRAY_BUFFER,
-        colors.size() * sizeof(glm::vec3),
+        static_cast<isize>(colors.size() * sizeof(glm::vec3)),
         colors.data(),
         GL_STATIC_DRAW
     );
@@ -113,12 +179,13 @@ void AppState::render() const {
     );
     glEnableVertexAttribArray(this->vertex_color);
 
-    f64  start = -((static_cast<f64>(this->life.get_dimension()) / 2) - 0.5);
+    f64 const start =
+        -((static_cast<f64>(this->life.get_dimension()) / 2) - 0.5);
     auto translate = glm::translate(view, {start, start, start});
     auto mvp       = this->projection * translate;
 
-    glUniformMatrix4fv(this->mvp_location, 1, false, glm::value_ptr(mvp));
-    glDrawArrays(GL_POINTS, 0, points.size());
+    glUniformMatrix4fv(this->mvp_location, 1, 0U, glm::value_ptr(mvp));
+    glDrawArrays(GL_POINTS, 0, static_cast<i32>(points.size()));
 
     glDisableVertexAttribArray(this->vertex_position);
     glDisableVertexAttribArray(this->vertex_color);
@@ -127,7 +194,7 @@ void AppState::render() const {
     glBindVertexArray(0);
 }
 
-void framebuffer_size(GLFWwindow *window, int width, int height) {
+void framebuffer_size(GLFWwindow * /*window*/, int width, int height) {
     glViewport(0, 0, width, height);
 }
 
@@ -143,23 +210,49 @@ void AppState::restart() {
             this->life_rule.state_count, this->life_rule.start_dead_chance
         );
     } else if (this->life.get_dimension() <= 44) {
-        f64 dead_chance = this->life_rule.start_dead_chance * 0.7;
+        f64 const dead_chance = this->life_rule.start_dead_chance * 0.7;
         this->life.init_full_random(this->life_rule.state_count, dead_chance);
     } else {
-        f64 dead_chance = this->life_rule.start_dead_chance;
+        f64 const dead_chance = this->life_rule.start_dead_chance;
         this->life.init_center_random(this->life_rule.state_count, dead_chance);
     }
 }
 
 AppState::AppState()
     : life(Life(100)), projection(glm::perspective<f32>(
-                           glm::pi<f32>() / 4.0f, ASPECT_RATIO, 0.1f, 300.0f
+                           glm::pi<f32>() / 4.0F, ASPECT_RATIO, 0.1F, 300.0F
                        )),
-      life_rule(CLOUD_RULE),
-      shader_program(Shader(
-          "shader/shader.vert", "shader/shader.geom", "shader/shader.frag"
-      )) {
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f); // define a cor de fundo
+      life_rule(CLOUD_RULE), shader_program() {
+
+    if (glfwInit() == 0) {
+        panic("Failed to init GLFW");
+    }
+
+    this->window = glfwCreateWindow(
+        WINDOW_WIDTH, WINDOW_HEIGHT, "3D Cellular Automaton", nullptr, nullptr
+    );
+    if (this->window == nullptr) {
+        panic("Failed to create window");
+    }
+    glfwMakeContextCurrent(this->window);
+
+    if (gladLoadGL(glfwGetProcAddress) == 0) {
+        panic("Failed to load glad");
+    }
+
+    glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+    glfwSwapInterval(1);
+
+    glfwSetWindowUserPointer(this->window, this);
+    glfwSetKeyCallback(this->window, keyboard);
+    glfwSetScrollCallback(this->window, scroll);
+    glfwSetFramebufferSizeCallback(this->window, framebuffer_size);
+
+    this->shader_program = Shader(
+        "shader/shader.vert", "shader/shader.geom", "shader/shader.frag"
+    );
+
+    glClearColor(0.0F, 0.0F, 0.0F, 0.0F); // define a cor de fundo
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_CULL_FACE);
 
@@ -184,14 +277,27 @@ AppState::~AppState() {
     glDeleteVertexArrays(1, &this->VAO);
     glDeleteBuffers(1, &this->position_buffer);
     glDeleteBuffers(1, &this->color_buffer);
+    glfwTerminate();
 }
 
-void scroll(GLFWwindow *window, double xoffset, double yoffset) {
+void AppState::run() {
+    usize iteration = 0;
+    while (glfwWindowShouldClose(this->window) == 0) {
+        this->render();
+        this->update(iteration);
+        iteration += 1;
+
+        glfwSwapBuffers(this->window);
+        glfwPollEvents();
+    }
+}
+
+void scroll(GLFWwindow *window, double /*xoffset*/, double yoffset) {
     if (yoffset == 0.0) {
         return;
     }
 
-    AppState *state = static_cast<AppState *>(glfwGetWindowUserPointer(window));
+    auto *state = static_cast<AppState *>(glfwGetWindowUserPointer(window));
     assert(state != nullptr);
 
     if (yoffset > 0) {
@@ -207,12 +313,14 @@ void scroll(GLFWwindow *window, double xoffset, double yoffset) {
     state->restart();
 }
 
-void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods) {
+void keyboard(
+    GLFWwindow *window, int key, int /*scancode*/, int action, int mods
+) {
     if (action != GLFW_PRESS) {
         return;
     }
 
-    AppState *state = static_cast<AppState *>(glfwGetWindowUserPointer(window));
+    auto *state = static_cast<AppState *>(glfwGetWindowUserPointer(window));
     assert(state != nullptr);
 
     bool restart = false;
@@ -237,17 +345,12 @@ void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods) {
             restart          = true;
             state->full_init = true;
             break;
-        case '5':
-            state->life_rule = CUBE_RULE;
-            restart          = true;
-            state->full_init = true;
-            break;
         case GLFW_KEY_MINUS:
             state->update_rate =
                 std::min(state->update_rate * 2, static_cast<usize>(256));
             break;
         case GLFW_KEY_EQUAL:
-            if (mods & GLFW_MOD_SHIFT) {
+            if ((mods & GLFW_MOD_SHIFT) != 0) {
                 state->update_rate =
                     std::max(state->update_rate / 2, static_cast<usize>(1));
             }
@@ -263,93 +366,4 @@ void keyboard(GLFWwindow *window, int key, int scancode, int action, int mods) {
     }
 }
 
-static bool cell_rule_default(u8 count) {
-    return count == 4;
-}
-
-static glm::vec3
-cell_color_default(f32, u8, CellState state, u8 x, u8 y, u8 z) {
-    f32 t = 0.0f;
-    switch (state) {
-        case 1:
-            t = 0.9f;
-            break;
-        case 2:
-            t = 0.6f;
-            break;
-        case 3:
-            t = 0.3f;
-            break;
-        case 4:
-            t = 0.09f;
-            break;
-        default:
-            break;
-    }
-
-    return {1.0, t, 0};
-}
-
-static bool cell_rule_6_8(u8 count) {
-    return count >= 6 && count <= 8;
-}
-
-static inline f32 distance_from_center(f32 x, f32 y, f32 z, u8 dimension) {
-    f32 dx     = x - static_cast<f32>(dimension >> 1);
-    f32 dy     = y - static_cast<f32>(dimension >> 1);
-    f32 dz     = z - static_cast<f32>(dimension >> 1);
-    f32 square = dx * dx + dy * dy + dz * dz;
-    return square;
-}
-
-static glm::vec3 cell_color_6_8(
-    f32 max_distance, u8 dimension, CellState state, u8 x, u8 y, u8 z
-) {
-    f32 distance = distance_from_center(x, y, z, dimension);
-    f32 t        = std::sqrt(distance / max_distance);
-
-    return {0.1, 1 - t, t};
-}
-
-static bool cell_alive_rule_cloud(u8 count) {
-    return count >= 13 && count <= 26;
-}
-
-static bool cell_dead_rule_cloud(u8 count) {
-    return count == 13 || count == 14 || (count >= 17 && count <= 19);
-}
-
-static glm::vec3 cell_color_cloud(
-    f32 max_distance, u8 dimension, CellState state, u8 x, u8 y, u8 z
-) {
-    glm::vec3 color;
-    color[0] = static_cast<f32>(x) / dimension;
-    color[1] = static_cast<f32>(y) / dimension;
-    color[2] = static_cast<f32>(z) / dimension;
-    return color;
-}
-
-static bool cell_alive_rule_decay(u8 count) {
-    switch (count) {
-        case 1:
-        case 4:
-        case 8:
-        case 11:
-            return true;
-        default:
-            return count >= 13 && count <= 26;
-    }
-}
-
-static bool cell_dead_rule_decay(u8 count) {
-    return count >= 13 && count <= 26;
-}
-
-static glm::vec3 cell_color_decay(
-    f32 max_distance, u8 dimension, CellState state, u8 x, u8 y, u8 z
-) {
-    f32 distance = distance_from_center(x, y, z, dimension);
-    f32 t        = distance / max_distance;
-
-    return {t, 0.0, 0.1};
-}
+} // namespace cell
