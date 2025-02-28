@@ -85,8 +85,11 @@ auto Life::draw(CellColorFn const &cell_color) const
     -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>> {
     static std::mutex vec_mutex;
 
-    std::vector<glm::vec3> points;
-    std::vector<glm::vec3> colors;
+    std::vector<glm::vec3> points{};
+    std::vector<glm::vec3> colors{};
+
+    points.reserve(this->size);
+    colors.reserve(this->size);
 
     u32 const inc   = this->size / THREAD_COUNT;
     u32       lower = 0;
@@ -99,8 +102,8 @@ auto Life::draw(CellColorFn const &cell_color) const
             auto [p, c] = this->draw_worker(cell_color, lower, upper);
             {
                 std::lock_guard<std::mutex> const lock(vec_mutex);
-                std::ranges::move(p, std::back_inserter(points));
-                std::ranges::move(c, std::back_inserter(colors));
+                std::ranges::move(std::move(p), std::back_inserter(points));
+                std::ranges::move(std::move(c), std::back_inserter(colors));
             }
         });
         lower = upper;
@@ -111,24 +114,27 @@ auto Life::draw(CellColorFn const &cell_color) const
         t.join();
     }
 
+    points.shrink_to_fit();
+    colors.shrink_to_fit();
+
     return {std::move(points), std::move(colors)};
 }
 
 auto Life::draw_worker(
     CellColorFn const &cell_color, u32 lower, u32 upper
 ) const -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>> {
-    std::vector<glm::vec3> points;
-    std::vector<glm::vec3> colors;
+    std::vector<glm::vec3> points{};
+    std::vector<glm::vec3> colors{};
 
     points.reserve(upper - lower);
     colors.reserve(upper - lower);
 
-    for (u32 idx = lower; idx < upper; idx += 1) {
-        CellState const state = this->cells[idx];
+    for (u32 i = lower; i < upper; i += 1) {
+        CellState const state = this->cells[i];
         if (state == 0) {
             continue;
         }
-        auto [x, y, z] = this->reverse_idx(idx);
+        auto [x, y, z] = this->reverse_idx(i);
         auto color =
             cell_color(this->max_distance, this->dimension, state, x, y, z);
         auto point = glm::vec3(x, y, z);
@@ -201,10 +207,9 @@ constexpr auto Life::idx(u32 x, u32 y, u32 z) const -> u32 {
 }
 
 constexpr auto Life::reverse_idx(u32 idx) const -> std::array<u8, 3> {
-    u8 const x = (idx % (this->dimension * this->dimension)) % this->dimension;
-    u8 const y =
-        ((idx % (this->dimension * this->dimension)) - x) / this->dimension;
-    u8 const z = (idx - y - x) / (this->dimension * this->dimension);
+    u8 const x = (idx % this->dimension);
+    u8 const y = (idx / this->dimension) % this->dimension;
+    u8 const z = (idx / this->dimension) / this->dimension;
     return {x, y, z};
 }
 } // namespace cell
