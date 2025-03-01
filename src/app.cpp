@@ -13,11 +13,11 @@
 namespace cell {
 
 namespace {
-auto cell_rule_default(u8 count) -> bool {
+constexpr auto cell_rule_default(u8 count) -> bool {
     return count == 4;
 }
 
-auto cell_color_default(
+constexpr auto cell_color_default(
     f32 /*unused*/, u8 /*unused*/, CellState state, u8 /*x*/, u8 /*y*/, u8 /*z*/
 ) -> glm::vec3 {
     f32 t = 0.0F;
@@ -41,19 +41,19 @@ auto cell_color_default(
     return {1.0, t, 0};
 }
 
-auto cell_rule_6_8(u8 count) -> bool {
+constexpr auto cell_rule_6_8(u8 count) -> bool {
     return count >= 6 && count <= 8;
 }
 
-inline auto distance_from_center(f32 x, f32 y, f32 z, u8 dimension) -> f32 {
-    f32 const dx     = x - static_cast<f32>(dimension >> 1U);
-    f32 const dy     = y - static_cast<f32>(dimension >> 1U);
-    f32 const dz     = z - static_cast<f32>(dimension >> 1U);
-    f32 const square = (dx * dx) + (dy * dy) + (dz * dz);
-    return square;
+constexpr auto distance_from_center(u8 x, u8 y, u8 z, u8 dimension) -> f32 {
+    u32 const dx     = (x - (dimension >> 1U));
+    u32 const dy     = (y - (dimension >> 1U));
+    u32 const dz     = (z - (dimension >> 1U));
+    u32 const square = (dx * dx) + (dy * dy) + (dz * dz);
+    return static_cast<f32>(square);
 }
 
-auto cell_color_6_8(
+constexpr auto cell_color_6_8(
     f32 max_distance, u8 dimension, CellState /*state*/, u8 x, u8 y, u8 z
 ) -> glm::vec3 {
     f32 const distance = distance_from_center(x, y, z, dimension);
@@ -62,15 +62,15 @@ auto cell_color_6_8(
     return {0.1, 1 - t, t};
 }
 
-auto cell_alive_rule_cloud(u8 count) -> bool {
+constexpr auto cell_alive_rule_cloud(u8 count) -> bool {
     return count >= 13 && count <= 26;
 }
 
-auto cell_dead_rule_cloud(u8 count) -> bool {
+constexpr auto cell_dead_rule_cloud(u8 count) -> bool {
     return count == 13 || count == 14 || (count >= 17 && count <= 19);
 }
 
-auto cell_color_cloud(
+constexpr auto cell_color_cloud(
     f32 /*max_distance*/, u8 dimension, CellState /*state*/, u8 x, u8 y, u8 z
 ) -> glm::vec3 {
     glm::vec3 color;
@@ -80,7 +80,7 @@ auto cell_color_cloud(
     return color;
 }
 
-auto cell_alive_rule_decay(u8 count) -> bool {
+constexpr auto cell_alive_rule_decay(u8 count) -> bool {
     switch (count) {
         case 1:
         case 4:
@@ -92,11 +92,11 @@ auto cell_alive_rule_decay(u8 count) -> bool {
     }
 }
 
-auto cell_dead_rule_decay(u8 count) -> bool {
+constexpr auto cell_dead_rule_decay(u8 count) -> bool {
     return count >= 13 && count <= 26;
 }
 
-auto cell_color_decay(
+constexpr auto cell_color_decay(
     f32 max_distance, u8 dimension, CellState /*state*/, u8 x, u8 y, u8 z
 ) -> glm::vec3 {
     f32 const distance = distance_from_center(x, y, z, dimension);
@@ -263,8 +263,8 @@ void AppState::render() const {
     );
     glEnableVertexAttribArray(this->vertex_color);
 
-    f64 const start =
-        -((static_cast<f64>(this->life.get_dimension()) / 2) - 0.5);
+    f32 const start =
+        -(static_cast<f32>(this->life.get_dimension() >> 1) - 0.5F);
     auto translate = glm::translate(view, {start, start, start});
     auto mvp       = this->projection * translate;
 
@@ -280,7 +280,10 @@ void AppState::render() const {
 
 void AppState::update(usize value) {
     if (value % this->update_rate == 0) {
+        f64 const start = glfwGetTime();
         this->life.update(this->life_rule);
+        this->stats.update_count += 1;
+        this->stats.update_time += glfwGetTime() - start;
     }
 }
 
@@ -324,7 +327,6 @@ AppState::AppState()
 
     glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
     glfwSwapInterval(1);
-
     glfwSetWindowUserPointer(this->window, this);
     glfwSetKeyCallback(this->window, keyboard);
     glfwSetScrollCallback(this->window, scroll);
@@ -370,24 +372,25 @@ AppState::~AppState() {
 }
 
 void AppState::run() {
-    usize iteration   = 0;
-    usize frame_count = 0;
-    f64   last        = glfwGetTime();
+    usize iteration        = 0;
+    usize frame_count      = 0;
+    f64   last             = glfwGetTime();
+    this->stats.start_time = last;
     while (glfwWindowShouldClose(this->window) == 0) {
         this->render();
         frame_count += 1;
         f64 const current = glfwGetTime();
         if (current - last >= 1.0F) {
             f64 fps = static_cast<f64>(frame_count) / (current - last);
-            println("{} fps", fps);
+            println("fps: {}", fps);
             frame_count = 0;
             last        = current;
         }
         this->update(iteration);
         iteration += 1;
 
-        glfwSwapBuffers(this->window);
         glfwPollEvents();
+        glfwSwapBuffers(this->window);
     }
 }
 

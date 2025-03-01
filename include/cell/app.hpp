@@ -7,12 +7,19 @@
 
 namespace cell {
 
-static constexpr i32 WINDOW_WIDTH  = 900;
+static constexpr i32 WINDOW_WIDTH  = 1600;
 static constexpr i32 WINDOW_HEIGHT = 900;
 static constexpr f32 ASPECT_RATIO =
     static_cast<f32>(WINDOW_WIDTH) / static_cast<f32>(WINDOW_HEIGHT);
 
+struct Stats {
+    usize update_count{};
+    f64   update_time{};
+    f64   start_time{};
+};
+
 class AppState {
+    Stats       stats{};
     Life        life;
     GLFWwindow *window;
     glm::mat4x4 projection;

@@ -27,6 +27,18 @@ inline auto random_state(u8 state_count, f64 dead_chance) -> CellState {
     return 0;
 }
 
+constexpr auto toroidal(i8 n, u8 dimension) -> u8 {
+    [[assume(n >= -1)]];
+    if (n < 0) {
+        return dimension - 1;
+    }
+    [[assume(n <= dimension)]];
+    if (static_cast<u8>(n) == dimension) {
+        return 0;
+    }
+    return n;
+}
+
 } // namespace
 
 Life::Life(u8 dimension) {
@@ -34,15 +46,12 @@ Life::Life(u8 dimension) {
 }
 
 void Life::resize(u8 dimension) {
-    auto const  dim  = static_cast<usize>(dimension);
-    usize const size = dim * dim * dim;
+    u32 const size = dimension * dimension * dimension;
 
     assert(size % THREAD_COUNT == 0);
-    assert(dimension <= UINT8_MAX);
-    assert(size <= UINT32_MAX);
 
     this->dimension = dimension;
-    this->size      = static_cast<u32>(size);
+    this->size      = size;
     this->max_distance =
         3.0F * static_cast<f32>((dimension >> 1U) * (dimension >> 1U));
     this->cells.resize(size, 0);
@@ -91,27 +100,25 @@ auto Life::draw(CellColorFn const &cell_color) const
     points.reserve(this->size);
     colors.reserve(this->size);
 
-    u32 const inc   = this->size / THREAD_COUNT;
-    u32       lower = 0;
-    u32       upper = inc;
+    {
+        u32 const inc   = this->size / THREAD_COUNT;
+        u32       lower = 0;
+        u32       upper = inc;
 
-    std::array<std::jthread, THREAD_COUNT> threads;
+        std::array<std::jthread, THREAD_COUNT> threads;
 
-    for (auto &t : threads) {
-        t = std::jthread([this, &points, &colors, cell_color, lower, upper]() {
-            auto [p, c] = this->draw_worker(cell_color, lower, upper);
-            {
-                std::lock_guard<std::mutex> const lock(vec_mutex);
-                std::ranges::move(std::move(p), std::back_inserter(points));
-                std::ranges::move(std::move(c), std::back_inserter(colors));
-            }
-        });
-        lower = upper;
-        upper += inc;
-    }
-
-    for (auto &t : threads) {
-        t.join();
+        for (auto &thrd : threads) {
+            thrd = std::jthread(
+                [this, &points, &colors, cell_color, lower, upper]() {
+                    auto [p, c] = this->draw_worker(cell_color, lower, upper);
+                    std::lock_guard<std::mutex> const lock(vec_mutex);
+                    std::ranges::move(std::move(p), std::back_inserter(points));
+                    std::ranges::move(std::move(c), std::back_inserter(colors));
+                }
+            );
+            lower = upper;
+            upper += inc;
+        }
     }
 
     points.shrink_to_fit();
@@ -145,7 +152,7 @@ auto Life::draw_worker(
     return {std::move(points), std::move(colors)};
 }
 
-auto Life::count_neighbours(i32 x, i32 y, i32 z) const -> u8 {
+constexpr auto Life::count_neighbours(u8 x, u8 y, u8 z) const -> u8 {
     u8 live_neighbours = 0;
     for (i8 k = -1; k <= 1; k += 1) {
         for (i8 j = -1; j <= 1; j += 1) {
@@ -153,13 +160,10 @@ auto Life::count_neighbours(i32 x, i32 y, i32 z) const -> u8 {
                 if (i == 0 && j == 0 && k == 0) {
                     continue;
                 }
-                u8 const xn =
-                    static_cast<u8>(std::clamp(x + i, 0, this->dimension - 1));
-                u8 const yn =
-                    static_cast<u8>(std::clamp(y + j, 0, this->dimension - 1));
-                u8 const zn =
-                    static_cast<u8>(std::clamp(z + k, 0, this->dimension - 1));
-                live_neighbours += static_cast<int>(this->get(xn, yn, zn) != 0);
+                u8 const xn = toroidal(static_cast<i8>(x + i), this->dimension);
+                u8 const yn = toroidal(static_cast<i8>(y + j), this->dimension);
+                u8 const zn = toroidal(static_cast<i8>(z + k), this->dimension);
+                live_neighbours += static_cast<u8>(this->get(xn, yn, zn) != 0);
             }
         }
     }
@@ -193,8 +197,8 @@ void Life::update(LifeRule const &rule) {
 
     std::array<std::jthread, THREAD_COUNT> threads;
 
-    for (auto &t : threads) {
-        t     = std::jthread([this, rule, lower, upper]() {
+    for (auto &thrd : threads) {
+        thrd  = std::jthread([this, rule, lower, upper]() {
             this->update_worker(life_clone, rule, lower, upper);
         });
         lower = upper;
@@ -212,4 +216,5 @@ constexpr auto Life::reverse_idx(u32 idx) const -> std::array<u8, 3> {
     u8 const z = (idx / this->dimension) / this->dimension;
     return {x, y, z};
 }
+
 } // namespace cell

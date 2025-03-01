@@ -27,10 +27,10 @@ class Life {
     f32                    max_distance{};
     u8                     dimension{};
 
-    [[nodiscard]] auto count_neighbours(i32 x, i32 y, i32 z) const -> u8;
-    [[nodiscard]] auto get(u8 x, u8 y, u8 z) const -> CellState;
-    auto               set(u8 x, u8 y, u8 z, CellState state) -> CellState;
-    void               update_single(LifeRule const &rule);
+    [[nodiscard]] constexpr auto count_neighbours(u8 x, u8 y, u8 z) const -> u8;
+    [[nodiscard]] auto           get(u8 x, u8 y, u8 z) const -> CellState;
+    auto set(u8 x, u8 y, u8 z, CellState state) -> CellState;
+    void update_single(LifeRule const &rule);
 
     [[nodiscard]] constexpr auto idx(u32 x, u32 y, u32 z) const -> u32;
     [[nodiscard]] constexpr auto reverse_idx(u32 idx) const
