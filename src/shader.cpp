@@ -18,9 +18,9 @@ Shader::Shader(
     std::string fragment_code;
 
     {
-        std::ifstream vertex_file(vertex_path);
-        std::ifstream geom_file(geom_path);
-        std::ifstream fragment_file(fragment_path);
+        std::ifstream const vertex_file(vertex_path);
+        std::ifstream const geom_file(geom_path);
+        std::ifstream const fragment_file(fragment_path);
 
         if (!vertex_file.is_open() || !geom_file.is_open() ||
             !fragment_file.is_open()) {

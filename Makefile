@@ -5,11 +5,11 @@ TARGET_PATH := bin
 INCLUDE_PATH := include
 USER_HEADER_PATH := $(INCLUDE_PATH)/cell
 
-CC := g++-13
-CPP_STD := -std=c++23
+CC := clang++-21
+CPP_STD := -std=c++23 -stdlib=libc++
 CPP_FLAGS := -O3
-CPP_FLAGS += -I$(INCLUDE_PATH) $(CPP_STD) -g -Werror -Wall -Wextra -Wno-unused-parameter
-LIB_FLAGS := -lGL -lglfw
+CPP_FLAGS += -I$(INCLUDE_PATH) $(CPP_STD) -g -Werror -Wall -Wextra -Wno-unused-parameter -Wno-unused-function
+LIB_FLAGS := -lGL -lglfw3
 OBJ_FLAGS := $(CPP_FLAGS) -c
 
 TARGET_NAME := cellular

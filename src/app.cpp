@@ -228,8 +228,8 @@ void AppState::render() const {
     f32 const cam_z  = std::cos(time / 5) * radius;
 
     glm::vec3 const eye_pos(cam_x, cam_y, cam_z);
-    glm::vec3 const center(0.0, 0.0, 0.0);
-    glm::vec3 const up(0.0, 1.0, 0.0);
+    glm::vec3 constexpr center(0.0, 0.0, 0.0);
+    glm::vec3 constexpr up(0.0, 1.0, 0.0);
 
     auto view = glm::lookAt(eye_pos, center, up);
 
@@ -263,10 +263,9 @@ void AppState::render() const {
     );
     glEnableVertexAttribArray(this->vertex_color);
 
-    f32 const start =
-        -(static_cast<f32>(this->life.get_dimension() >> 1) - 0.5F);
-    auto translate = glm::translate(view, {start, start, start});
-    auto mvp       = this->projection * translate;
+    f32 const start = -static_cast<f32>(this->life.get_dimension() >> 1) + 0.5F;
+    auto      translate = glm::translate(view, {start, start, start});
+    auto      mvp       = this->projection * translate;
 
     glUniformMatrix4fv(this->mvp_location, 1, 0U, glm::value_ptr(mvp));
     glDrawArrays(GL_POINTS, 0, static_cast<i32>(points.size()));
@@ -365,24 +364,39 @@ AppState::AppState()
 }
 
 AppState::~AppState() {
-    glDeleteVertexArrays(1, &this->VAO);
-    glDeleteBuffers(1, &this->position_buffer);
-    glDeleteBuffers(1, &this->color_buffer);
-    glfwTerminate();
+    try {
+        f64 const update_avg = this->stats.update_time /
+                               static_cast<f64>(this->stats.update_count);
+        f64 const draw_avg =
+            this->stats.draw_time / static_cast<f64>(this->stats.draw_count);
+        eprintln("update: {} ms", update_avg * 1000.0F);
+        eprintln("draw: {} ms", draw_avg * 1000.0F);
+        glDeleteVertexArrays(1, &this->VAO);
+        glDeleteBuffers(1, &this->position_buffer);
+        glDeleteBuffers(1, &this->color_buffer);
+        glfwTerminate();
+    } catch (...) {
+        std::cerr << "exception";
+    }
 }
 
 void AppState::run() {
-    usize iteration        = 0;
-    usize frame_count      = 0;
-    f64   last             = glfwGetTime();
-    this->stats.start_time = last;
+    usize iteration   = 0;
+    usize frame_count = 0;
+    usize n           = 0;
+    f64   last        = glfwGetTime();
     while (glfwWindowShouldClose(this->window) == 0) {
+        f64 const start = glfwGetTime();
         this->render();
+        this->stats.draw_count += 1;
+        this->stats.draw_time += glfwGetTime() - start;
+
         frame_count += 1;
         f64 const current = glfwGetTime();
         if (current - last >= 1.0F) {
             f64 fps = static_cast<f64>(frame_count) / (current - last);
-            println("fps: {}", fps);
+            eprintln("[{}] fps: {}", n, fps);
+            n += 1;
             frame_count = 0;
             last        = current;
         }

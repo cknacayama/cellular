@@ -14,8 +14,9 @@ static constexpr f32 ASPECT_RATIO =
 
 struct Stats {
     usize update_count{};
+    usize draw_count{};
     f64   update_time{};
-    f64   start_time{};
+    f64   draw_time{};
 };
 
 class AppState {

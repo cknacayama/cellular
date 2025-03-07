@@ -28,15 +28,14 @@ inline auto random_state(u8 state_count, f64 dead_chance) -> CellState {
 }
 
 constexpr auto toroidal(i8 n, u8 dimension) -> u8 {
-    [[assume(n >= -1)]];
     if (n < 0) {
         return dimension - 1;
     }
-    [[assume(n <= dimension)]];
-    if (static_cast<u8>(n) == dimension) {
+    u8 const un = n;
+    if (un == dimension) {
         return 0;
     }
-    return n;
+    return un;
 }
 
 } // namespace
@@ -51,13 +50,12 @@ void Life::resize(u8 dimension) {
     assert(size % THREAD_COUNT == 0);
 
     this->dimension = dimension;
-    this->size      = size;
     this->max_distance =
         3.0F * static_cast<f32>((dimension >> 1U) * (dimension >> 1U));
     this->cells.resize(size, 0);
 }
 
-auto Life::get(u8 x, u8 y, u8 z) const -> CellState {
+constexpr auto Life::get(u8 x, u8 y, u8 z) const -> CellState {
     u32 const idx = this->idx(x, y, z);
     return this->cells[idx];
 }
@@ -91,34 +89,23 @@ void Life::init_full_random(u8 state_count, f64 dead_chance) {
 }
 
 auto Life::draw(CellColorFn const &cell_color) const
-    -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>> {
-    static std::mutex vec_mutex;
-
+    -> std::array<std::vector<glm::vec3>, 2> {
     std::vector<glm::vec3> points{};
     std::vector<glm::vec3> colors{};
 
-    points.reserve(this->size);
-    colors.reserve(this->size);
+    points.reserve(this->size());
+    colors.reserve(this->size());
 
-    {
-        u32 const inc   = this->size / THREAD_COUNT;
-        u32       lower = 0;
-        u32       upper = inc;
-
-        std::array<std::jthread, THREAD_COUNT> threads;
-
-        for (auto &thrd : threads) {
-            thrd = std::jthread(
-                [this, &points, &colors, cell_color, lower, upper]() {
-                    auto [p, c] = this->draw_worker(cell_color, lower, upper);
-                    std::lock_guard<std::mutex> const lock(vec_mutex);
-                    std::ranges::move(std::move(p), std::back_inserter(points));
-                    std::ranges::move(std::move(c), std::back_inserter(colors));
-                }
-            );
-            lower = upper;
-            upper += inc;
+    for (u32 i = 0; i < this->size(); i += 1) {
+        CellState const state = this->cells[i];
+        if (state == 0) {
+            continue;
         }
+        auto [x, y, z] = this->reverse_idx(i);
+        auto color =
+            cell_color(this->max_distance, this->dimension, state, x, y, z);
+        points.emplace_back(x, y, z);
+        colors.push_back(color);
     }
 
     points.shrink_to_fit();
@@ -127,32 +114,8 @@ auto Life::draw(CellColorFn const &cell_color) const
     return {std::move(points), std::move(colors)};
 }
 
-auto Life::draw_worker(
-    CellColorFn const &cell_color, u32 lower, u32 upper
-) const -> std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>> {
-    std::vector<glm::vec3> points{};
-    std::vector<glm::vec3> colors{};
-
-    points.reserve(upper - lower);
-    colors.reserve(upper - lower);
-
-    for (u32 i = lower; i < upper; i += 1) {
-        CellState const state = this->cells[i];
-        if (state == 0) {
-            continue;
-        }
-        auto [x, y, z] = this->reverse_idx(i);
-        auto color =
-            cell_color(this->max_distance, this->dimension, state, x, y, z);
-        auto point = glm::vec3(x, y, z);
-        points.push_back(point);
-        colors.push_back(color);
-    }
-
-    return {std::move(points), std::move(colors)};
-}
-
-constexpr auto Life::count_neighbours(u8 x, u8 y, u8 z) const -> u8 {
+[[clang::always_inline]] constexpr auto
+Life::count_neighbours(u8 x, u8 y, u8 z) const -> u8 {
     u8 live_neighbours = 0;
     for (i8 k = -1; k <= 1; k += 1) {
         for (i8 j = -1; j <= 1; j += 1) {
@@ -174,14 +137,17 @@ void Life::update_worker(
     Life const &clone, LifeRule const &rule, u32 lower, u32 upper
 ) {
     for (u32 i = lower; i < upper; i += 1) {
-        auto [x, y, z]        = this->reverse_idx(i);
-        u8 const        count = clone.count_neighbours(x, y, z);
         CellState const state = this->cells[i];
-        if (state > 1 || (state == 1 && !rule.alive_rule(count))) {
+        if (state > 1) {
             this->cells[i] -= 1;
         }
+        auto [x, y, z] = this->reverse_idx(i);
+        u8 const count = clone.count_neighbours(x, y, z);
         if (state == 0 && rule.dead_rule(count)) {
             this->cells[i] = rule.state_count - 1;
+        }
+        if (state == 1 && !rule.alive_rule(count)) {
+            this->cells[i] = 0;
         }
     }
 }
@@ -191,9 +157,9 @@ void Life::update(LifeRule const &rule) {
 
     life_clone = *this;
 
-    u32 const inc   = this->size / THREAD_COUNT;
-    u32       lower = 0;
-    u32       upper = inc;
+    u32 const increment = this->size() / THREAD_COUNT;
+    u32       lower     = 0;
+    u32       upper     = increment;
 
     std::array<std::jthread, THREAD_COUNT> threads;
 
@@ -202,11 +168,11 @@ void Life::update(LifeRule const &rule) {
             this->update_worker(life_clone, rule, lower, upper);
         });
         lower = upper;
-        upper += inc;
+        upper += increment;
     }
 }
 
-constexpr auto Life::idx(u32 x, u32 y, u32 z) const -> u32 {
+constexpr auto Life::idx(u8 x, u8 y, u8 z) const -> u32 {
     return ((z * this->dimension + y) * this->dimension) + x;
 }
 
